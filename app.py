@@ -15,6 +15,9 @@ NOKOS_BASE_URL = "https://nokospusat.com/api/v1"
 MARKUP = 500 
 WAKTU_TUNGGU_OTP = 15 * 60 
 
+# ==========================================
+# DATABASE
+# ==========================================
 DB_FILE = "produk.json"
 CONFIG_FILE = "konfigurasi.json"
 USERS_FILE = "users.json"
@@ -385,8 +388,582 @@ def admin_semua_saldo(message):
     state.pop(message.chat.id, None)
     bot.send_chat_action(message.chat.id, 'typing')
     users = load_users()
-    teks = "📊 *DAFTAR SALDO USER*\n\n"
-    for uid, data in users.items():
+    teks = "📊 *DAFTAR SALDO USER*\n\
+        for uid, data in users.items():
         try: 
             chat_info = bot.get_chat(int(uid))
- 
+            nama = chat_info.first_name or "User"
+            username = f"@{chat_info.username}" if chat_info.username else "-"
+        except: 
+            nama = data.get('nama', 'User')
+            username = data.get('username', '-')
+        teks += f"👤 {esc(nama)} ({esc(username)})\n🆔 `{uid}` | 💰 Rp {get_saldo(uid):,}\n\n"
+    bot.reply_to(message, teks if len(teks) > 50 else "Belum ada user.", parse_mode='Markdown')
+
+@bot.message_handler(func=lambda m: is_admin(m) and m.text == "💵 Tambah Saldo User")
+def admin_tambah_saldo(message): 
+    state.pop(message.chat.id, None)
+    state[message.chat.id] = {"aksi": "admin_topup", "step": "id"}
+    bot.reply_to(message, "💵 *Tambah Saldo User*\n\nKetik ID Telegram user:")
+
+@bot.message_handler(func=lambda m: is_admin(m) and m.text == "📉 Kurangi Saldo User")
+def admin_kurangi_saldo(message): 
+    state.pop(message.chat.id, None)
+    state[message.chat.id] = {"aksi": "admin_minus", "step": "id"}
+    bot.reply_to(message, "📉 *Kurangi Saldo User*\n\nKetik ID Telegram user:")
+
+@bot.message_handler(func=lambda m: is_admin(m) and m.text == "🔑 Set API Nokos")
+def set_api_nokos(message): 
+    state.pop(message.chat.id, None)
+    state[message.chat.id] = {"aksi": "set_nokos_key"}
+    bot.reply_to(message, "🔑 Kirim *API Key Nokospusat*:")
+
+@bot.message_handler(func=lambda m: is_admin(m) and m.text == "💰 Cek Saldo Nokos")
+def cek_saldo_nokos(message):
+    state.pop(message.chat.id, None)
+    bot.send_chat_action(message.chat.id, 'typing')
+    res = nokos_api("GET", "/wallet")
+    if "error" in res: 
+        bot.reply_to(message, f"❌ {res['error']}")
+        return
+    bot.reply_to(message, f"💰 *Saldo Nokospusat:*\n\nRp {res.get('data', {}).get('balance', 0):,}", parse_mode='Markdown')
+
+@bot.message_handler(func=lambda m: is_admin(m) and m.text == "🖼️ Set Gambar QRIS")
+def set_qris(message): 
+    state.pop(message.chat.id, None)
+    state[message.chat.id] = {"aksi": "set_qris"}
+    bot.reply_to(message, "🖼️ Kirim FOTO QRIS:")
+
+@bot.message_handler(func=lambda m: is_admin(m) and m.text == "⚙️ Atur Channel")
+def set_ch(message): 
+    state.pop(message.chat.id, None)
+    state[message.chat.id] = {"aksi": "set_channel"}
+    bot.reply_to(message, "⚙️ Kirim username channel (contoh: @AiszChannel):")
+
+@bot.message_handler(func=lambda m: is_admin(m) and m.text == "📢 Broadcast")
+def bc(message): 
+    state.pop(message.chat.id, None)
+    state[message.chat.id] = {"aksi": "broadcast"}
+    bot.reply_to(message, "📢 Ketik pesan broadcast:")
+
+@bot.message_handler(func=lambda m: is_admin(m) and m.text == "➕ Tambah Produk")
+def tambah(message): 
+    state.pop(message.chat.id, None)
+    state[message.chat.id] = {"aksi": "tambah", "step": "nama"}
+    bot.reply_to(message, "➕ Ketik nama produk:")
+
+@bot.message_handler(func=lambda m: is_admin(m) and m.text == "✏️ Edit Produk")
+def edit(message):
+    state.pop(message.chat.id, None)
+    p = load_produk()
+    if not p: 
+        bot.reply_to(message, "Kosong.")
+        return
+    state[message.chat.id] = {"aksi": "edit", "step": "pilih"}
+    bot.reply_to(message, "✏️ Ketik nama produk:\n\n" + "\n".join([f"▪️ {n}" for n in p]))
+
+@bot.message_handler(func=lambda m: is_admin(m) and m.text == "🗑️ Hapus Produk")
+def hapus(message):
+    state.pop(message.chat.id, None)
+    p = load_produk()
+    if not p: 
+        bot.reply_to(message, "Kosong.")
+        return
+    state[message.chat.id] = {"aksi": "hapus", "step": "pilih"}
+    bot.reply_to(message, "🗑️ Ketik nama produk:\n\n" + "\n".join([f"▪️ {n}" for n in p]))
+
+@bot.message_handler(func=lambda m: is_admin(m) and m.text == "📋 Lihat Produk")
+def lihat(message):
+    state.pop(message.chat.id, None)
+    p = load_produk()
+    if not p: 
+        bot.reply_to(message, "Kosong.")
+        return
+    bot.reply_to(message, "📋 *PRODUK (ADMIN)*\n\n" + "".join([f"▪️ *{esc(n)}*\n   {esc(d.get('harga', '-'))} | {esc(d.get('stok', '-'))}\n\n" for n, d in p.items()]), parse_mode='Markdown')
+@bot.message_handler(func=lambda m: is_admin(m) and m.text == "📊 Statistik")
+def stat_admin(message):
+    state.pop(message.chat.id, None)
+    p = load_produk()
+    u = load_users()
+    a = load_admins()
+    ts = 0
+    tn = 0
+    for n, d in p.items():
+        try: 
+            si = int(''.join(filter(str.isdigit, str(d.get('stok', '0')))))
+            ts += si
+            hi = int(''.join(filter(str.isdigit, str(d.get('harga', '0')))))
+            tn += hi * si
+        except: 
+            pass
+    bot.reply_to(message, f"📊 *STATISTIK*\n\n📦 Produk: {len(p)}\n📊 Stok: {ts}\n💰 Nilai: Rp {tn:,}\n👥 User: {len(u)}\n🤖 AI: {'🟢' if load_config().get('ai_enabled') else '🔴'}", parse_mode='Markdown')
+
+@bot.message_handler(func=lambda m: is_admin(m) and m.text == "💾 Backup Data")
+def backup(message):
+    state.pop(message.chat.id, None)
+    try:
+        if os.path.exists(DB_FILE): 
+            bot.send_document(message.chat.id, open(DB_FILE, 'rb'), caption="💾 Produk")
+        if os.path.exists(ADMINS_FILE): 
+            bot.send_document(message.chat.id, open(ADMINS_FILE, 'rb'), caption="👥 Admin")
+        if os.path.exists(SALDO_FILE): 
+            bot.send_document(message.chat.id, open(SALDO_FILE, 'rb'), caption="💰 Saldo")
+    except Exception as e: 
+        bot.reply_to(message, f"❌ {e}")
+
+@bot.message_handler(func=lambda m: is_admin(m) and m.text == "👥 Kelola Admin")
+def kelola_adm(message):
+    state.pop(message.chat.id, None)
+    admins = load_admins()
+    teks = "👥 *DAFTAR ADMIN*\n\n"
+    for i, a in enumerate(admins, 1): 
+        teks += f"{i}. `{a}`" + (" 👑 (Tidak bisa dihapus)" if a == ADMIN_ID else "") + "\n"
+    teks += "\n💡 Tambah/hapus via 💬 Chat dengan AI."
+    bot.reply_to(message, teks, parse_mode='Markdown')
+
+@bot.message_handler(func=lambda m: is_admin(m) and m.text == "🤖 Pengaturan AI")
+def ai_setting(message):
+    state.pop(message.chat.id, None)
+    c = load_config()
+    st = "🟢 AKTIF" if c.get("ai_enabled") else "🔴 MATI"
+    hk = "✅ Diset" if c.get("groq_api_key") else "❌ Belum"
+    mk = types.InlineKeyboardMarkup(row_width=1)
+    if c.get("ai_enabled"): 
+        mk.add(types.InlineKeyboardButton("🔴 Matikan AI", callback_data="ai_off"))
+    else: 
+        mk.add(types.InlineKeyboardButton("🟢 Nyalakan AI", callback_data="ai_on"))
+    mk.add(types.InlineKeyboardButton("🔑 Set API Key Groq", callback_data="ai_setkey"))
+    bot.reply_to(message, f"🤖 *PENGATURAN AI*\n\nStatus: {st}\nAPI Key: {hk}", parse_mode='Markdown', reply_markup=mk)
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('ai_'))
+def ai_cb(call):
+    if call.from_user.id not in load_admins(): return
+    c = load_config()
+    if call.data == "ai_on": 
+        c["ai_enabled"] = True
+        simpan_config(c)
+        bot.answer_callback_query(call.id, "✅ AI ON!")
+    elif call.data == "ai_off": 
+        c["ai_enabled"] = False
+        simpan_config(c)
+        bot.answer_callback_query(call.id, "✅ AI OFF!")
+    elif call.data == "ai_setkey": 
+        state[call.from_user.id] = {"aksi": "set_ai_key"}
+        bot.send_message(call.from_user.id, "🔑 Kirim API Key Groq:")
+
+@bot.message_handler(func=lambda m: is_admin(m) and m.text == "💬 Chat dengan AI")
+def chat_ai(message):
+    state.pop(message.chat.id, None)
+    if not load_config().get("groq_api_key"): 
+        bot.reply_to(message, "❌ Set API Key dulu.")
+        return
+    state[message.chat.id] = {"aksi": "chat_ai_admin"}
+    bot.reply_to(message, "💬 *CHAT AI AKTIF*\n\nKetik perintah atau ngobrol. Klik ⬅️ Keluar Chat AI untuk keluar.", parse_mode='Markdown')
+
+@bot.message_handler(func=lambda m: is_admin(m) and m.text == "⬅️ Keluar Chat AI")
+def keluar_ai(message): 
+    state.pop(message.chat.id, None)
+    bot.reply_to(message, "✅ Keluar.", reply_markup=menu_admin())
+
+@bot.message_handler(func=lambda m: is_admin(m) and m.text == "⬅️ Keluar Mode Admin")
+def keluar_admin(message): 
+    state.pop(message.chat.id, None)
+    bot.reply_to(message, "Keluar.", reply_markup=menu_user())
+@bot.message_handler(content_types=['photo'])
+def handle_foto(message):
+    chat_id = message.chat.id
+    uid = message.from_user.id
+    u = message.from_user
+    nama_user = u.first_name or u.last_name or u.username or "Kak"
+    if is_admin(message) and chat_id in state and state[chat_id].get("aksi") == "set_qris":
+        c = load_config()
+        c["qris_file_id"] = message.photo[-1].file_id
+        simpan_config(c)
+        state.pop(chat_id, None)
+        bot.reply_to(message, "✅ QRIS disimpan!", reply_markup=menu_admin())
+        return
+    if not is_admin(message):
+        if not is_user_joined(uid): 
+            bot.reply_to(message, "⚠️ Join channel dulu.")
+            return
+        simpan_user(uid, nama_user, u.username)
+        if chat_id in state and state[chat_id].get("aksi") == "waiting_topup":
+            state.pop(chat_id, None)
+            markup = types.InlineKeyboardMarkup(row_width=2)
+            markup.add(types.InlineKeyboardButton("✅ Dana Masuk", callback_data=f"approve_{uid}_{message.message_id}")).add(types.InlineKeyboardButton("❌ Belum Masuk", callback_data=f"reject_{uid}_{message.message_id}"))
+            bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=f"💳 *BUKTI TOP UP MASUK*\n\n👤 Nama: {esc(nama_user)}\n🆔 ID: `{uid}`\n\nPilih aksi:", parse_mode='Markdown', reply_markup=markup)
+            bot.reply_to(message, "✅ Bukti transfer diterima. Mohon tunggu verifikasi Admin.")
+        else:
+            bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=f"📥 *PESAN FOTO DARI PEMBELI*\n\n👤 {esc(nama_user)}\n🆔 {uid}\n\n💬 {esc(message.caption or 'Tanpa caption')}", parse_mode='Markdown')
+            bot.reply_to(message, "✅ Foto diteruskan ke admin. 🙏")
+
+@bot.message_handler(func=lambda m: True, content_types=['text'])
+def handle_all(message):
+    chat_id = message.chat.id
+    text = message.text
+    uid = message.from_user.id
+    u = message.from_user
+    nama_user = u.first_name or u.last_name or u.username or "Kak"
+    if not is_admin(message): 
+        simpan_user(uid, nama_user, u.username)
+    if text in MENU_BUTTONS: 
+        state.pop(chat_id, None)
+    if chat_id in state:
+        s = state[chat_id]
+        if s["aksi"] == "admin_approve_topup":
+            try: 
+                nom = int(text)
+            except: 
+                bot.reply_to(message, "❌ Harus angka. Ketik ulang nominalnya:")
+                return
+            target_uid = s["target_uid"]
+            ubah_saldo(target_uid, nom)
+            state.pop(chat_id, None)
+            bot.reply_to(message, f"✅ Berhasil menambahkan Rp {nom:,} ke User `{target_uid}`.", reply_markup=menu_admin())
+            try: 
+                bot.send_message(target_uid, f"🎉 *TOP UP BERHASIL*\n\nSaldo kamu telah ditambahkan sebesar *Rp {nom:,}*.", parse_mode='Markdown')
+            except: 
+                pass
+            return
+        if s["aksi"] == "cek_otp_id":
+            order_id = text.strip()
+            state.pop(chat_id, None)
+            bot.send_chat_action(chat_id, 'typing')
+            res = nokos_api("GET", f"/orders/{order_id}")
+            if "error" in res: 
+                bot.reply_to(message, f"❌ Pesanan tidak ditemukan: {res['error']}" if "diperiksa" not in res["error"].lower() else "⏳ Status sedang diperiksa server. Tunggu 5-10 detik lalu cek lagi.")
+                return
+            data = res.get("data", {})
+            if data.get("id"): 
+                bot.reply_to(message, f"🔍 *STATUS PESANAN*\n\nID: `{order_id}`\nNomor: `{data.get('phone_number', '-')}`\nStatus: {data.get('status')}\nOTP: `{data.get('otp') or 'Belum masuk'}`", parse_mode='Markdown')
+            else: 
+                bot.reply_to(message, "❌ Pesanan tidak ditemukan.")
+            return
+        if s["aksi"] == "set_nokos_key": 
+            c = load_config()
+            c["nokos_api_key"] = text.strip()
+            simpan_config(c)
+            state.pop(chat_id, None)
+            bot.reply_to(message, "✅ API Key disimpan!", reply_markup=menu_admin())
+            return
+        if s["aksi"] == "set_ai_key": 
+            c = load_config()
+            c["groq_api_key"] = text.strip()
+            simpan_config(c)
+            state.pop(chat_id, None)
+            bot.reply_to(message, "✅ API Key AI disimpan!", reply_markup=menu_admin())
+            return
+        if s["aksi"] in ["admin_topup", "admin_minus"]:
+            tipe = "Tambah" if s["aksi"] == "admin_topup" else "Kurangi"
+            if s["step"] == "id": 
+                s["uid"] = text.strip()
+                s["step"] = "nominal"
+                bot.reply_to(message, f"ID: `{s['uid']}`\nKetik nominal yang mau di{tipe.lower()}:")
+            elif s["step"] == "nominal":
+                try: 
+                    nom = int(text)
+                except: 
+                    bot.reply_to(message, "❌ Harus angka. Atau ketik /admin untuk batal.")
+                    return
+                ubah_saldo(s["uid"], nom if s["aksi"] == "admin_topup" else -nom)
+                state.pop(chat_id, None)
+                bot.reply_to(message, f"✅ Saldo user `{s['uid']}` berhasil di{tipe.lower()} Rp {nom:,}", reply_markup=menu_admin())
+                try: 
+                    bot.send_message(s["uid"], f"🎉 Saldo kamu telah di{tipe.lower()} sebesar Rp {nom:,} oleh Admin.", parse_mode='Markdown')
+                except: 
+                    pass
+            return
+        if s["aksi"] == "cari_layanan":
+            bot.send_chat_action(chat_id, 'typing')
+            res = nokos_api("GET", f"/services?q={text}&limit=5")
+            if "error" in res: 
+                bot.reply_to(message, f"❌ {res['error']}")
+                state.pop(chat_id, None)
+                return
+            services = res.get("data", [])
+            if not services: 
+                bot.reply_to(message, "❌ Layanan tidak ditemukan.")
+                return
+            markup = types.InlineKeyboardMarkup(row_width=1)
+            for svc in services: 
+                markup.add(types.InlineKeyboardButton(f"{esc(svc['name'])}", callback_data=f"svc_{svc['id']}"))
+            markup.add(types.InlineKeyboardButton("⬅️ Kembali", callback_data="back_apps"))
+            bot.reply_to(message, "Hasil pencarian:", reply_markup=markup)
+            state.pop(chat_id, None)
+            return
+        if s["aksi"] == "set_channel":
+            ch = text.strip().replace("https://t.me/", "").replace("t.me/", "").replace("@", "")
+            ch = "@" + ch
+            try: 
+                bot.get_chat_member(ch, bot.get_me().id)
+                c = load_config()
+                c["channel_username"] = ch
+                simpan_config(c)
+                state.pop(chat_id, None)
+                bot.reply_to(message, f"✅ Channel: {ch}", reply_markup=menu_admin())
+            except Exception as e: 
+                state.pop(chat_id, None)
+                bot.reply_to(message, f"❌ {e}", reply_markup=menu_admin())
+            return
+        if s["aksi"] == "broadcast":
+            users = load_users()
+            ok = 0
+            no = 0
+            for uid_bc in users:
+                if uid_bc in load_admins(): continue
+                try: 
+                    bot.send_message(uid_bc, f"📢 *PENGUMUMAN*\n\n{text}", parse_mode='Markdown')
+                    ok += 1
+                except: 
+                    no += 1
+            state.pop(chat_id, None)
+            bot.reply_to(message, f"✅ Broadcast!\nSukses: {ok}\nGagal: {no}", reply_markup=menu_admin())
+            return
+        if s["aksi"] == "tambah":
+            if not text.strip(): 
+                bot.reply_to(message, "❌ Tidak boleh kosong. Ketik ulang:")
+                return
+            if s["step"] == "nama": 
+                s["nama"] = text
+                s["step"] = "harga"
+                bot.reply_to(message, f"Nama: *{esc(s['nama'])}*\n\nHarga:")
+            elif s["step"] == "harga": 
+                s["harga"] = text
+                s["step"] = "stok"
+                bot.reply_to(message, f"Harga: *{esc(s['harga'])}*\n\nStok:")
+            elif s["step"] == "stok":
+                produk = load_produk()
+                produk[s["nama"]] = {"harga": s["harga"], "stok": text}
+                simpan_produk(produk)
+                state.pop(chat_id, None)
+                bot.reply_to(message, f"✅ *{esc(s['nama'])}* ditambahkan!", reply_markup=menu_admin())
+            return
+        elif s["aksi"] == "edit":
+            produk = load_produk()
+            if s["step"] == "pilih":
+                if text not in produk: 
+                    bot.reply_to(message, "⚠️ Gak ada. Ketik persis:")
+                    return
+                s["nama"] = text
+                s["step"] = "harga"
+                bot.reply_to(message, "Harga baru (atau `-` skip):")
+            elif s["step"] == "harga":
+                if text != "-": produk[s["nama"]]["harga"] = text
+                s["step"] = "stok"
+                bot.reply_to(message, "Stok baru (atau `-` skip):")
+            elif s["step"] == "stok":
+                if text != "-": produk[s["nama"]]["stok"] = text
+                simpan_produk(produk)
+                state.pop(chat_id, None)
+                bot.reply_to(message, f"✅ Diupdate!", reply_markup=menu_admin())
+            return
+        elif s["aksi"] == "hapus":
+            produk = load_produk()
+            if text not in produk: 
+                bot.reply_to(message, "⚠️ Gak ada. Ketik persis:")
+                return
+            del produk[text]
+            simpan_produk(produk)
+            state.pop(chat_id, None)
+            bot.reply_to(message, f"✅ Dihapus!", reply_markup=menu_admin())
+            return
+        if s["aksi"] == "chat_ai_admin":
+            if s.get("pending_action"):
+                pwd = text.strip()
+                if pwd == "batal": 
+                    bot.reply_to(message, "❌ Dibatalkan.")
+                    s.pop("pending_action", None)
+                    s.pop("pending_user_id", None)
+                    return
+                if pwd == ADMIN_PASSWORD:
+                    admins = load_admins()
+                    try: 
+                        uid_target = int(s["pending_user_id"])
+                    except: 
+                        bot.reply_to(message, "❌ ID invalid.")
+                        s.pop("pending_action", None)
+                        s.pop("pending_user_id", None)
+                        return
+                    if s["pending_action"] == "add_admin":
+                        if uid_target in admins: 
+                            bot.reply_to(message, f"⚠️ `{uid_target}` udah admin.")
+                        else: 
+                            admins.append(uid_target)
+                            simpan_admins(admins)
+                            bot.reply_to(message, f"✅ `{uid_target}` jadi admin!")
+                            bot.send_message(uid_target, "🎉 Kamu jadi admin.\n/start")
+                    elif s["pending_action"] == "remove_admin":
+                        if uid_target == ADMIN_ID: 
+                            bot.reply_to(message, "❌ Gak bisa hapus admin utama!")
+                        elif uid_target not in admins: 
+                            bot.reply_to(message, f"⚠️ `{uid_target}` bukan admin.")
+                        else: 
+                            admins.remove(uid_target)
+                            simpan_admins(admins)
+                            bot.reply_to(message, f"✅ `{uid_target}` dicabut.")
+                else: 
+                    bot.reply_to(message, "❌ Password salah!")
+                s.pop("pending_action", None)
+                s.pop("pending_user_id", None)
+                return
+            ml = text.lower().strip()
+            if ml in ["statistik", "stat"]: 
+                stat_admin(message)
+                return
+            if ml in ["daftar admin", "list admin"]: 
+                kelola_adm(message)
+                return
+            if ml in ["backup", "backup data"]: 
+                backup(message)
+                return
+            bot.send_chat_action(chat_id, 'typing')
+            resp = tanya_ai(text, load_produk(), True)
+            if not resp: 
+                bot.reply_to(message, "❌ AI gagal.")
+                return
+            match = re.search(r'\{.*?\}', resp, re.DOTALL)
+            if match:
+                try:
+                    cmd = json.loads(match.group(0))
+                    aksi = cmd.get("action")
+                    produk = load_produk()
+                    if aksi == "add": 
+                        produk[cmd["nama"]] = {"harga": cmd.get("harga", "-"), "stok": cmd.get("stok", "-")}
+                        simpan_produk(produk)
+                        bot.reply_to(message, f"✅ *Ditambah*\n{esc(cmd['nama'])}")
+                    elif aksi == "edit":
+                        if cmd["nama"] in produk:
+                            if cmd.get("harga"): produk[cmd["nama"]]["harga"] = cmd["harga"]
+                            if cmd.get("stok"): produk[cmd["nama"]]["stok"] = cmd["stok"]
+                            simpan_produk(produk)
+                            bot.reply_to(message, f"✅ *Diupdate*\n{esc(cmd['nama'])}")
+                        else: 
+                            bot.reply_to(message, "⚠️ Gak ada.")
+                    elif aksi == "delete":
+                        if cmd["nama"] in produk: 
+                            del produk[cmd["nama"]]
+                            simpan_produk(produk)
+                            bot.reply_to(message, "✅ Dihapus!")
+                        else: 
+                            bot.reply_to(message, "⚠️ Gak ada.")
+                    elif aksi == "add_admin": 
+                        s["pending_action"] = "add_admin"
+                        s["pending_user_id"] = str(cmd.get("user_id", ""))
+                        bot.reply_to(message, f"🔐 ID: `{s['pending_user_id']}`\n\nKetik password:")
+                    elif aksi == "remove_admin": 
+                        s["pending_action"] = "remove_admin"
+                        s["pending_user_id"] = str(cmd.get("user_id", ""))
+                        bot.reply_to(message, f"🔐 ID: `{s['pending_user_id']}`\n\nKetik password:")
+                    bersih = resp.replace(match.group(0), "").strip()
+                    if bersih: 
+                        bot.send_message(chat_id, f"🤖 {bersih}")
+                except Exception as e: 
+                    bot.reply_to(message, f"❌ {e}")
+            else: 
+                bot.reply_to(message, f"🤖 {resp}")
+            return
+
+    if not is_admin(message):
+        if not is_user_joined(uid): 
+            bot.reply_to(message, "⚠️ Kamu belum join channel. Silakan klik /start untuk join.")
+            return
+        c = load_config()
+        if c.get("ai_enabled", False): 
+            h = tanya_ai(text, load_produk(), False)
+            bot.reply_to(message, h if h else "Diteruskan ke admin. 🙏")
+        else: 
+            bot.reply_to(message, "Pesan diteruskan ke admin. 🙏", reply_markup=menu_user())
+        teks = f"📥 *PESAN MASUK DARI PEMBELI*\n\n👤 {esc(nama_user)}\n🔗 @{esc(u.username) if u.username else 'Tidak ada'}\n🆔 {uid}\n\n💬 {esc(text)}"
+        broadcast_to_admins(teks, parse_mode='Markdown')
+
+@bot.callback_query_handler(func=lambda call: True)
+def callback_handler(call):
+    data = call.data
+    chat_id = call.message.chat.id
+    uid = call.from_user.id
+    msg_id = call.message.message_id
+    if data.startswith("buy_"):
+        parts = data.split("_")
+        svc_id, provider_id, price_asli, harga_jual = parts[1], parts[2], int(parts[3]), int(parts[4])
+        if get_saldo(uid) < harga_jual: 
+            bot.answer_callback_query(call.id, "❌ Saldo tidak cukup! Top Up dulu.", show_alert=True)
+            return
+        bot.answer_callback_query(call.id, "Memproses...")
+        bot.edit_message_text("⏳ Memproses...", chat_id, msg_id)
+        ubah_saldo(uid, -harga_jual)
+        payload = {"service_id": svc_id, "provider": "provider_1", "country_code": "6", "provider_id": provider_id, "quoted_price": price_asli}
+        res = nokos_api("POST", "/orders", payload)
+        if "error" in res: 
+            ubah_saldo(uid, harga_jual)
+            bot.edit_message_text(f"❌ Gagal (Saldo dikembalikan):\n{res['error']}", chat_id, msg_id)
+            return
+        order_id = res.get("data", {}).get("id")
+        orders = load_orders()
+        orders[order_id] = "pending"
+        simpan_orders(orders)
+        markup_batal = types.InlineKeyboardMarkup(row_width=2).add(types.InlineKeyboardButton("🔍 Cek OTP", callback_data=f"checkotp_{order_id}"), types.InlineKeyboardButton("❌ Batalkan", callback_data=f"cancel_{order_id}_{harga_jual}"))
+        bot.edit_message_text(f"✅ *Pesanan Dibuat!*\nID: `{order_id}`\n\n⏳ Menunggu OTP (Maks 15 menit)...", chat_id, msg_id, parse_mode='Markdown', reply_markup=markup_batal)
+        u_data = load_users().get(str(uid), {"nama": "Unknown", "username": "-"})
+        broadcast_to_admins(f"🛒 *PEMBELIAN BARU*\n\n👤 Nama: {esc(u_data['nama'])}\n🔗 Username: {esc(u_data['username'])}\n🆔 ID: `{uid}`\nLayanan ID: `{svc_id}`\nHarga: Rp {harga_jual:,}", parse_mode='Markdown')
+        threading.Thread(target=poll_otp, args=(order_id, uid, harga_jual, chat_id, msg_id)).start()
+    elif data.startswith("checkotp_"):
+        order_id = data.split("_")[1]
+        bot.answer_callback_query(call.id, "Mengecek OTP...")
+        res = nokos_api("GET", f"/orders/{order_id}")
+        if "error" in res: 
+            bot.send_message(chat_id, f"❌ {res['error']}" if "diperiksa" not in res["error"].lower() else "⏳ Status sedang diperiksa server. Tunggu 5-10 detik lalu cek lagi.")
+            return
+        data_order = res.get("data", {})
+        otp = data_order.get("otp")
+        status = data_order.get("status")
+        bot.send_message(chat_id, f"✅ *OTP KAMU:* `{otp}`" if otp else f"⏳ Status: {status}. OTP belum masuk.", parse_mode='Markdown')
+    elif data.startswith("cancel_"):
+        parts = data.split("_")
+        order_id = parts[1]
+        harga_jual = int(parts[2])
+        bot.answer_callback_query(call.id, "Membatalkan...")
+        res = nokos_api("DELETE", f"/orders/{order_id}")
+        if "error" in res: 
+            bot.send_message(chat_id, f"❌ Gagal membatalkan:\n{res['error']}")
+        else: 
+            proses_refund(order_id, uid, harga_jual, chat_id, msg_id, "Dibatalkan oleh pengguna.")
+    elif data.startswith("finish_"):
+        order_id = data.split("_")[1]
+        bot.answer_callback_query(call.id, "Menutup...")
+        nokos_api("POST", f"/orders/{order_id}/finish")
+        bot.edit_message_text("✅ Pesanan selesai.", chat_id, msg_id)
+    elif data.startswith("approve_"):
+        parts = data.split("_")
+        target_uid = parts[1]
+        original_msg_id = parts[2]
+        bot.answer_callback_query(call.id, "Silakan ketik nominal.")
+        state[chat_id] = {"aksi": "admin_approve_topup", "target_uid": target_uid, "msg_id": original_msg_id}
+        bot.send_message(chat_id, f"✅ *Dana Masuk*\n\nKetik nominal saldo yang masuk untuk User `{target_uid}` (contoh: `10000`):", parse_mode='Markdown')
+    elif data.startswith("reject_"):
+        parts = data.split("_")
+        target_uid = parts[1]
+        original_msg_id = parts[2]
+        bot.answer_callback_query(call.id, "Ditolak.")
+        bot.edit_message_caption("❌ *BUKTI DITOLAK*\n\nDana belum masuk.", chat_id, msg_id)
+        try: 
+            bot.send_message(target_uid, f"❌ *Top Up Ditolak*\n\nBukti transfer belum masuk ke rekening admin.", parse_mode='Markdown')
+        except: 
+            pass
+
+# ==========================================
+# WEBHOOK FLASK
+# ==========================================
+app = Flask(__name__)
+
+@app.route('/' + TOKEN, methods=['POST'])
+def getMessage():
+    json_string = request.get_data().decode('utf-8')
+    update = telebot.types.Update.de_json(json_string)
+    bot.process_new_updates([update])
+    return "!", 200
+
+@app.route("/")
+def webhook():
+    bot.remove_webhook()
+    bot.set_webhook(url="https://Aisz25.pythonanywhere.com/" + TOKEN)
+return "Webhook berhasil diset!", 200

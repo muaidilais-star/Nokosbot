@@ -966,4 +966,4 @@ def getMessage():
 def webhook():
     bot.remove_webhook()
     bot.set_webhook(url="https://Aisz25.pythonanywhere.com/" + TOKEN)
-return "Webhook berhasil diset!", 200
+    return "Webhook berhasil diset!", 200

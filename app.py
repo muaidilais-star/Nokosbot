@@ -388,7 +388,7 @@ def admin_semua_saldo(message):
     state.pop(message.chat.id, None)
     bot.send_chat_action(message.chat.id, 'typing')
     users = load_users()
-    teks = "📊 *DAFTAR SALDO USER*\n\
+    teks = "📊 *DAFTAR SALDO USER*\n\n"
         for uid, data in users.items():
         try: 
             chat_info = bot.get_chat(int(uid))

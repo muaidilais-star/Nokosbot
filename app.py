@@ -73,7 +73,8 @@ def esc(text):
     if not text: return ""
     return str(text).replace('_', '\\_').replace('*', '\\*').replace('`', '\\`').replace('[', '\\[')
 
-bot = telebot.TeleBot(TOKEN, proxy='http://proxy.server:3128')
+telebot.apihelper.proxy = {'https': 'http://proxy.server:3128', 'http': 'http://proxy.server:3128'}
+bot = telebot.TeleBot(TOKEN)
 state = {}
 
 def is_admin(message): return message.from_user.id in load_admins()

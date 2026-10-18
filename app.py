@@ -73,7 +73,7 @@ def esc(text):
     if not text: return ""
     return str(text).replace('_', '\\_').replace('*', '\\*').replace('`', '\\`').replace('[', '\\[')
 
-bot = telebot.TeleBot(TOKEN)
+bot = telebot.TeleBot(TOKEN, proxy='http://proxy.server:3128')
 state = {}
 
 def is_admin(message): return message.from_user.id in load_admins()
@@ -149,9 +149,7 @@ def poll_otp(order_id, user_id, markup_harga, chat_id, msg_id):
 def call_groq(api_key, sys, msg, tokens=300):
     for m in ["openai/gpt-oss-120b", "openai/gpt-oss-20b"]:
         try:
-            r = requests.post("https://api.groq.com/openai/v1/chat/completions", headers={"Authorization": f"Bearer {api_key}"}, json={"model": m, "messages": [{"role": "system", "content": sys}, {"role": "user", "content": msg}], "max_tokens": tokens}, timeout=20)
-            if r.status_code == 200: 
-                return r.json()['choices'][0]['message']['content']
+            r = requests.post("https://api.groq.com/openai/v1/chat/completions", headers={"Authorization": f"Bearer {api_key}"}, json={"model": m, "messages": [{"role": "system", "content": sys}, {"role": "user", "content": msg}], "max_tokens": tokens}, proxies={"http": "http://proxy.server:3128", "https": "http://proxy.server:3128"}, timeout=20)
         except: 
             pass
     return None

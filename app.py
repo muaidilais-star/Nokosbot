@@ -384,12 +384,13 @@ def cari_manual_cb(call):
     bot.send_message(call.message.chat.id, "🛒 Ketik nama layanan (contoh: `WhatsApp`):", parse_mode='Markdown')
 
 @bot.message_handler(func=lambda m: is_admin(m) and m.text == "📋 Semua Saldo User")
+@bot.message_handler(func=lambda m: is_admin(m) and m.text == "📋 Semua Saldo User")
 def admin_semua_saldo(message):
     state.pop(message.chat.id, None)
     bot.send_chat_action(message.chat.id, 'typing')
     users = load_users()
     teks = "📊 *DAFTAR SALDO USER*\n\n"
-        for uid, data in users.items():
+    for uid, data in users.items():
         try: 
             chat_info = bot.get_chat(int(uid))
             nama = chat_info.first_name or "User"
@@ -399,7 +400,6 @@ def admin_semua_saldo(message):
             username = data.get('username', '-')
         teks += f"👤 {esc(nama)} ({esc(username)})\n🆔 `{uid}` | 💰 Rp {get_saldo(uid):,}\n\n"
     bot.reply_to(message, teks if len(teks) > 50 else "Belum ada user.", parse_mode='Markdown')
-
 @bot.message_handler(func=lambda m: is_admin(m) and m.text == "💵 Tambah Saldo User")
 def admin_tambah_saldo(message): 
     state.pop(message.chat.id, None)
